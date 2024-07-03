@@ -1,0 +1,31 @@
+{
+  "name": "coincident-next",
+  "version": "0.0.0",
+  "scripts": {
+    "build": "rollup --config rollup.js && sabayon ./test/sw.js && npm run size",
+    "coi": "npx mini-coi .",
+    "server": "static-handler .",
+    "size": "echo -e \"\\x1b[1mfile        size\\x1b[0m\"; echo \"main        $(cat dist/main.js | brotli | wc -c)\"; echo \"worker      $(cat dist/worker.js | brotli | wc -c)\";"
+  },
+  "keywords": [],
+  "author": "Andrea Giammarchi",
+  "license": "MIT",
+  "description": "",
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "mini-coi": "^0.3.3",
+    "rollup": "^4.18.0",
+    "static-handler": "^0.4.3"
+  },
+  "type": "module",
+  "exports": {
+    "./main": "./src/main.js",
+    "./worker": "./src/worker.js",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "js-proxy": "^0.2.1",
+    "sabayon": "^0.3.1"
+  }
+}
