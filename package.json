@@ -26,6 +26,6 @@
   },
   "dependencies": {
     "js-proxy": "^0.2.1",
-    "sabayon": "^0.3.1"
+    "sabayon": "^0.4.0"
   }
 }
