@@ -6,6 +6,7 @@ import {
   SharedArrayBuffer,
   Worker as $Worker,
   ignore,
+  polyfill,
 } from 'sabayon/main';
 
 import {
@@ -41,9 +42,11 @@ export default ({
           CHANNEL,
           Int32Array,
           SharedArrayBuffer,
-          this.postMessage.bind(this),
           ignore,
+          false,
           parse,
+          polyfill,
+          (...args) => this.postMessage(...args),
           transform,
           Atomics.waitAsync,
         ],

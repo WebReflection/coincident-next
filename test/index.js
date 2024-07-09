@@ -2,11 +2,11 @@ import coincident from '../dist/main.js';
 
 const { Worker } = coincident();
 
-const w = new Worker('./worker.js');
+const w = new Worker('./worker.js', { serviceWorker: './sw.js' });
 
 w.proxy.alert = (...args) => {
-  alert(args);
+  console.info('main', 'alert', args);
   return args.join('-');
 };
 
-console.log(await w.proxy.log(4, 5, 6));
+console.log('async', await w.proxy.log(4, 5, 6));

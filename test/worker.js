@@ -3,7 +3,7 @@ import coincident from '../dist/worker.js';
 const { proxy } = await coincident();
 
 proxy.log = (...args) => {
-  console.log(args);
+  console.info('worker', 'log', args);
   return args.join('-');
 };
 

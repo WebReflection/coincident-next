@@ -19,11 +19,11 @@ const decoder = new TextDecoder('utf-16');
 const buffers = new WeakSet;
 const transfer = (...args) => (buffers.add(args), args);
 
-let seppuku = 0;
+let seppuku = '';
 const results = new Map;
-const actionLength = (stringify, transform) => async (callback, id, sb, args) => {
+const actionLength = (stringify, transform) => async (callback, [name, id, sb, args, isSync]) => {
+  if (isSync) seppuku = name;
   try {
-    seppuku++;
     const result = await callback(...args);
     if (result !== void 0) {
       const serialized = stringify(transform ? transform(result) : result);
@@ -32,7 +32,7 @@ const actionLength = (stringify, transform) => async (callback, id, sb, args) =>
     }
   }
   finally {
-    seppuku--;
+    if (isSync) seppuku = '';
     sb[0] = 1;
     notify(sb, 0);
   }
@@ -44,10 +44,11 @@ const actionFill = (id, sb) => {
     ui16a[i] = result.charCodeAt(i);
   notify(sb, 0);
 };
-const actionWait = (waitLength, map, [id, sb, name, args]) => {
+const actionWait = (waitLength, map, rest) => {
+  const [name] = rest;
   const callback = map.get(name);
   if (!callback) throw new Error(`Unknown proxy.${name}()`);
-  waitLength(callback, id, sb, args);
+  waitLength(callback, rest);
 };
 
 let uid = 0;
@@ -56,31 +57,36 @@ const invoke = (
     CHANNEL,
     Int32Array,
     SharedArrayBuffer,
-    postMessage,
     ignore,
+    isSync,
     parse,
+    polyfill,
+    postMessage,
     transform,
     waitAsync,
   ],
   name,
 ) => (...args) => {
-  if (seppuku) throw new Error(`💀🔒 - Deadlock on proxy.${name}()`);
+  if (seppuku !== '')
+    throw new Error(`💀🔒 - proxy.${name}() deadlock in proxy.${seppuku}()`);
   const id = uid++;
   const transfer = [];
   if (buffers.has(args.at(-1) || transfer))
     buffers.delete(transfer = args.pop());
   const data = ignore(transform ? args.map(transform) : args);
   let sb = new Int32Array(new SharedArrayBuffer(I32_BYTES * 2));
-  postMessage([CHANNEL, ACTION_WAIT, id, sb, name, data], { transfer });
+  postMessage([CHANNEL, ACTION_WAIT, name, id, sb, data, isSync], { transfer });
   return waitAsync(sb, 0).value.then(() => {
     const length = sb[1];
     if (!length) return;
     const bytes = UI16_BYTES * length;
     sb = new Int32Array(new SharedArrayBuffer(bytes + (bytes % I32_BYTES)));
     postMessage([CHANNEL, ACTION_NOTIFY, id, sb]);
-    return waitAsync(sb, 0).value.then(() => parse(
-      decoder.decode(new Uint16Array(sb.buffer).slice(0, length))
-    ));
+    return waitAsync(sb, 0).value.then(() =>{
+      const ui16a = new Uint16Array(sb.buffer);
+      const sub = polyfill ? ui16a.subarray(0, length) : ui16a.slice(0, length);
+      return parse(decoder.decode(sub));
+    });
   });
 };
 
