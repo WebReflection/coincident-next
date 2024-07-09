@@ -2,10 +2,10 @@
   "name": "coincident-next",
   "version": "0.0.0",
   "scripts": {
-    "build": "rollup --config rollup.js && sabayon ./test/sw.js && npm run size",
+    "build": "node build/constants.cjs && rollup --config build/dist.js && sabayon ./test/sw.js && npm run size",
     "coi": "npx mini-coi .",
     "server": "static-handler .",
-    "size": "echo -e \"\\x1b[1mfile        size\\x1b[0m\"; echo \"main        $(cat dist/main.js | brotli | wc -c)\"; echo \"worker      $(cat dist/worker.js | brotli | wc -c)\";"
+    "size": "echo -e \"\\x1b[1mfile          size\\x1b[0m\"; echo \"main          $(cat dist/main.js | brotli | wc -c)\"; echo \"worker        $(cat dist/worker.js | brotli | wc -c)\"; echo \"window/worker $(cat dist/window/worker.js | brotli | wc -c)\"; echo \"window/main   $(cat dist/window/main.js | brotli | wc -c)\";"
   },
   "keywords": [],
   "author": "Andrea Giammarchi",
@@ -15,17 +15,20 @@
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-terser": "^0.4.4",
     "mini-coi": "^0.3.3",
-    "rollup": "^4.18.0",
+    "rollup": "^4.18.1",
     "static-handler": "^0.4.3"
   },
   "type": "module",
   "exports": {
     "./main": "./src/main.js",
     "./worker": "./src/worker.js",
+    "./window/main": "./src/window/main.js",
+    "./window/worker": "./src/window/worker.js",
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "js-proxy": "^0.2.1",
-    "sabayon": "^0.4.0"
+    "gc-hook": "^0.3.1",
+    "js-proxy": "^0.4.2",
+    "sabayon": "^0.4.4"
   }
 }

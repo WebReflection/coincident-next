@@ -1,3 +1,58 @@
+const ARRAY     = 'array';
+const BIGINT    = 'bigint';
+const BOOLEAN   = 'boolean';
+const FUNCTION  = 'function';
+const NULL      = 'null';
+const NUMBER    = 'number';
+const OBJECT    = 'object';
+const STRING    = 'string';
+const SYMBOL    = 'symbol';
+const UNDEFINED = 'undefined';
+
+let uid$1 = 0;
+const ids = new Map;
+const values$1 = new Map;
+
+/**
+ * Remove by id or value any previously stored reference.
+ * @param {number | unknown} id the held value by id or the value itself.
+ * @returns {boolean} `true` if the operation was successful, `false` otherwise.
+ */
+const drop = id => {
+  const [a, b] = typeof id === NUMBER ? [values$1, ids] : [ids, values$1];
+  const had = a.has(id);
+  if (had) {
+    b.delete(a.get(id));
+    a.delete(id);
+  }
+  return had;
+};
+
+/**
+ * Return the held value reference by its unique identifier.
+ * @param {number} id the unique identifier for the value reference.
+ * @returns {unknown} the related value / reference or undefined.
+ */
+const get = id => values$1.get(id);
+
+/**
+ * Create once a unique number id for a generic value reference.
+ * @param {unknown} value a reference used to create a unique identifier.
+ * @returns {number} a unique identifier for that reference.
+ */
+const hold = value => {
+  if (!ids.has(value)) {
+    let id;
+    // a bit apocalyptic scenario but if this thread runs forever
+    // and the id does a whole int32 roundtrip we might have still
+    // some reference dangling around
+    while (/* c8 ignore next */ values$1.has(id = uid$1++));
+    ids.set(value, id);
+    values$1.set(id, value);
+  }
+  return ids.get(value);
+};
+
 // (c) Andrea Giammarchi - MIT
 
 const ACTION_INIT = 0;
@@ -6,11 +61,11 @@ const ACTION_WAIT = 2;
 const ACTION_SW = 3;
 
 const { ArrayBuffer, Atomics: $Atomics, Promise: Promise$1 } = globalThis;
-const { isArray } = Array;
-const { create, getPrototypeOf, values } = Object;
+const { isArray: isArray$1 } = Array;
+const { create: create$1, getPrototypeOf, values } = Object;
 
 const TypedArray = getPrototypeOf(Int32Array);
-const Atomics = create($Atomics);
+const Atomics = create$1($Atomics);
 
 const dispatch = ({ currentTarget, type, origin, lastEventId, source, ports }, data) =>
   currentTarget.dispatchEvent(new MessageEvent(type, { data, origin, lastEventId, source, ports }));
@@ -47,7 +102,7 @@ const ignorePatch = value => {
 
 const isChannel = (event, channel) => {
   const { data } = event;
-  const yes = isArray(data) && (
+  const yes = isArray$1(data) && (
     data.at(0) === channel ||
     (data.at(1) === ACTION_INIT && !channel)
   );
@@ -340,7 +395,7 @@ const createProxy = (details, map) => new Proxy(map, {
 // (c) Andrea Giammarchi - MIT
 
 
-var main = ({
+var coincident = ({
   parse,
   stringify,
   transform,
@@ -391,6 +446,244 @@ var main = ({
     Worker,
     polyfill,
     transfer,
+  };
+};
+
+// this literal allows mapping right away
+// string types into numeric values so that
+// the transported and transformed arrays
+// would use less bytes to satisfy te same
+// contract while exchanging information.
+// basically this is an home-made ENUM like
+// object literal ... that's it.
+// TBD: should this be part of js-proxy? it feels
+//      to me like it would rather belong in there.
+var numeric = Object.fromEntries([
+  ARRAY,
+  BIGINT,
+  BOOLEAN,
+  FUNCTION,
+  NULL,
+  NUMBER,
+  OBJECT,
+  STRING,
+  SYMBOL,
+  UNDEFINED,
+].map((k, i) => [k, i]));
+
+const DEFINE_PROPERTY              = 'defineProperty';
+const GET_OWN_PROPERTY_DESCRIPTOR  = 'getOwnPropertyDescriptor';
+const OWN_KEYS                     = 'ownKeys';
+
+const DESTRUCT = 'destruct';
+
+const { [OWN_KEYS]: ownKeys } = Reflect;
+
+
+const known = new Map(
+  ownKeys(Symbol)
+    .filter(s => typeof Symbol[s] === SYMBOL)
+    .map(s => [Symbol[s], s])
+);
+
+const fromSymbol = value => {
+  if (value.startsWith('.'))
+    return Symbol.for(value.slice(1));
+  for (const [symbol, name] of known) {
+    if (name === value)
+      return symbol;
+  }
+};
+
+const toSymbol = value => (
+  known.get(value) ||
+  `.${Symbol.keyFor(value) || ''}`
+);
+
+const CHANNEL = 'd7c9d1a3-b35f-4a8b-9fad-6883fe008204';
+const MAIN = 'M' + CHANNEL;
+const WORKER = 'W' + CHANNEL;
+
+// (c) Andrea Giammarchi - ISC
+
+const registry = new FinalizationRegistry(
+  ([onGarbageCollected, held, debug]) => {
+    if (debug) console.debug(`Held value ${String(held)} not relevant anymore`);
+    onGarbageCollected(held);
+  }
+);
+
+const nullHandler = Object.create(null);
+
+/**
+ * @template {unknown} H
+ * @typedef {Object} GCHookOptions
+ * @prop {boolean} [debug=false] if `true`, logs values once these can get collected.
+ * @prop {ProxyHandler<object>} [handler] optional proxy handler to use instead of the default one.
+ * @prop {H} [return=H] if specified, overrides the returned proxy with its value.
+ * @prop {unknown} [token=H] it's the held value by default, but it can be any other token except the returned value itself.
+ */
+
+/**
+ * @template {unknown} H
+ * @param {H} hold the reference to hold behind the scene and passed along the callback once it triggers.
+ * @param {(held:H) => void} onGarbageCollected the callback that will receive the held value once its wrapper or indirect reference is no longer needed.
+ * @param {GCHookOptions<H>} [options] an optional configuration object to change some default behavior.
+ */
+const create = (
+  hold,
+  onGarbageCollected,
+  { debug, handler, return: r, token = hold } = nullHandler
+) => {
+  // if no reference to return is defined,
+  // create a proxy for the held one and register that instead.
+  /** @type {H} */
+  const target = r || new Proxy(hold, handler || nullHandler);
+  const args = [target, [onGarbageCollected, hold, !!debug]];
+  if (token !== false) args.push(token);
+  // register the target reference in a way that
+  // the `onGarbageCollected(held)` callback will eventually notify.
+  registry.register(...args);
+  return target;
+};
+
+const { addEventListener } = EventTarget.prototype;
+const eventsHandler = new WeakMap();
+Reflect.defineProperty(EventTarget.prototype, "addEventListener", {
+  value(type, listener, ...options) {
+    const invoke = options.at(0)?.invoke;
+    if (invoke) {
+      let map = eventsHandler.get(this);
+      if (!map) eventsHandler.set(this, (map = new Map()));
+      map.set(type, [].concat(invoke));
+      delete options[0].invoke;
+    }
+    return addEventListener.call(this, type, listener, ...options);
+  },
+});
+
+var handleEvent = event => {
+  const { currentTarget, target, type } = event;
+  const methods = eventsHandler.get(currentTarget || target)?.get(type);
+  if (methods) for (const method of methods) event[method]();
+};
+
+const { isArray } = Array;
+
+var main = (options) => {
+  const exports = coincident(options);
+  const { Worker: $Worker } = exports;
+
+  const toEntry = value => {
+    const TYPE = typeof value;
+    switch (TYPE) {
+      case OBJECT: {
+        if (value === null) return [numeric[NULL], value];
+        if (value === globalThis) return [numeric[OBJECT], null];
+        if (isArray(value)) return [numeric[ARRAY], hold(value)];
+        return [numeric[OBJECT], value instanceof TypedArray ? value : hold(value)];
+      }
+      case FUNCTION: return [numeric[FUNCTION], hold(value)];
+      case SYMBOL: return [numeric[SYMBOL], toSymbol(value)];
+      default: return [numeric[TYPE], value];
+    }
+  };
+
+  class Worker extends $Worker {
+    constructor(url, options) {
+      const { proxy } = super(url, options);
+      const { [WORKER]: __worker__ } = proxy;
+
+      const proxies = new Map();
+      const onGC = ref => {
+        proxies.delete(ref);
+        __worker__(DESTRUCT, ref);
+      };
+
+      const fromEntry = ([numericTYPE, value]) => {
+        switch (numericTYPE) {
+          case numeric[OBJECT]: {
+            if (value === null) return globalThis;
+            if (typeof value === NUMBER) return get(value);
+            if (!(value instanceof TypedArray)) {
+              for (const key in value)
+                value[key] = fromEntry(value[key]);
+            }
+            return value;
+          }          case numeric[ARRAY]: {
+            if (typeof value === NUMBER) return get(value);
+            return value.map(fromEntry);
+          }          case numeric[FUNCTION]: {
+            switch (typeof value) {
+              case NUMBER: return get(value);
+              case STRING: {
+                let fn = proxies.get(value)?.deref();
+                if (!fn) {
+                  fn = create(value, onGC, {
+                    token: false,
+                    return: function (...args) {
+                      if (args.at(0) instanceof Event) handleEvent(...args);
+                      return __worker__(
+                        APPLY,
+                        value,
+                        toEntry(this),
+                        args.map(toEntry),
+                      );
+                    }
+                  });
+                  proxies.set(value, new WeakRef(fn));
+                }
+                return fn;
+              }
+            }
+          }          case numeric[SYMBOL]: return fromSymbol(value);
+          default: return value;
+        }
+      };
+
+      const asEntry = (method, target, args) => toEntry(method(target, ...args.map(fromEntry)));
+
+      const asDescriptor = (descriptor, asEntry) => {
+        const { get, set, value } = descriptor;
+        if (get) descriptor.get = asEntry(get);
+        if (set) descriptor.set = asEntry(set);
+        if (value) descriptor.value = asEntry(value);
+        return descriptor;
+      };
+
+      proxy[MAIN] = (TRAP, ref, ...args) => {
+        if (TRAP === DESTRUCT) drop(ref);
+        else {
+          const method = Reflect[TRAP];
+          const target = ref == null ? globalThis : get(ref);
+          switch (TRAP) {
+            case DEFINE_PROPERTY: {
+              const [name, descriptor] = args.map(fromEntry);
+              return toEntry(method(target, name, asDescriptor(descriptor, fromEntry)));
+            }
+            case GET_OWN_PROPERTY_DESCRIPTOR: {
+              const value = method(target, ...args.map(fromEntry));
+              return [numeric[value ? OBJECT : UNDEFINED], value ?? asDescriptor(value, toEntry)];
+            }
+            case OWN_KEYS: return [numeric[ARRAY], method(target).map(toEntry)];
+            default: return asEntry(method, target, args);
+          }
+        }
+      };
+
+      const debug = proxy[MAIN];
+      proxy[MAIN] = (...args) => {
+        console.log(...args);
+        const result = debug(...args);
+        console.log(result);
+        return result;
+      };
+    }
+  }
+
+  return {
+    ...exports,
+    Worker,
   };
 };
 

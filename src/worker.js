@@ -7,6 +7,7 @@ import {
   addEventListener,
   postMessage,
   ignore,
+  polyfill,
 } from 'sabayon/worker';
 
 import {
@@ -56,15 +57,18 @@ export default ({
         case ACTION_INIT: {
           CHANNEL = _;
           ready.resolve({
+            polyfill,
             transfer,
             proxy: createProxy(
               [
                 CHANNEL,
                 Int32Array,
                 SharedArrayBuffer,
-                postMessage,
                 ignore,
+                !!wait,
                 parse,
+                polyfill,
+                postMessage,
                 transform,
                 wait ?
                   (...args) => ({ value: { then: fn => fn(waitSync(...args)) } }) :
@@ -76,7 +80,9 @@ export default ({
           break;
         }
         case ACTION_WAIT: {
-          actionWait(waitLength, map, rest);
+          // give the code a chance to finish running (serviceWorker mode)
+          if (!map.size) setTimeout(actionWait, 0, waitLength, map, rest);
+          else actionWait(waitLength, map, rest);
           break;
         }
         case ACTION_NOTIFY: {
