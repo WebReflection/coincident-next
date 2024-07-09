@@ -1,8 +1,5 @@
 // (c) Andrea Giammarchi - MIT
 
-// MISSING
-//  * deadlock guard
-
 import {
   ACTION_INIT,
   ACTION_NOTIFY,
@@ -12,20 +9,21 @@ import {
   withResolvers,
 } from 'sabayon/shared';
 
-const {BYTES_PER_ELEMENT: I32_BYTES} = Int32Array;
-const {BYTES_PER_ELEMENT: UI16_BYTES} = Uint16Array;
+const { BYTES_PER_ELEMENT: I32_BYTES } = Int32Array;
+const { BYTES_PER_ELEMENT: UI16_BYTES } = Uint16Array;
 
 const { notify } = Atomics;
-const { entries } = Object;
 
 const decoder = new TextDecoder('utf-16');
 
 const buffers = new WeakSet;
 const transfer = (...args) => (buffers.add(args), args);
 
+let seppuku = 0;
 const results = new Map;
 const actionLength = (stringify, transform) => async (callback, id, sb, args) => {
   try {
+    seppuku++;
     const result = await callback(...args);
     if (result !== void 0) {
       const serialized = stringify(transform ? transform(result) : result);
@@ -34,6 +32,7 @@ const actionLength = (stringify, transform) => async (callback, id, sb, args) =>
     }
   }
   finally {
+    seppuku--;
     sb[0] = 1;
     notify(sb, 0);
   }
@@ -44,6 +43,11 @@ const actionFill = (id, sb) => {
   for (let ui16a = new Uint16Array(sb.buffer), i = 0, { length } = result; i < length; i++)
     ui16a[i] = result.charCodeAt(i);
   notify(sb, 0);
+};
+const actionWait = (waitLength, map, [id, sb, name, args]) => {
+  const callback = map.get(name);
+  if (!callback) throw new Error(`Unknown proxy.${name}()`);
+  waitLength(callback, id, sb, args);
 };
 
 let uid = 0;
@@ -58,15 +62,16 @@ const invoke = (
     transform,
     waitAsync,
   ],
-  index,
+  name,
 ) => (...args) => {
+  if (seppuku) throw new Error(`💀🔒 - Deadlock on proxy.${name}()`);
   const id = uid++;
   const transfer = [];
   if (buffers.has(args.at(-1) || transfer))
     buffers.delete(transfer = args.pop());
   const data = ignore(transform ? args.map(transform) : args);
   let sb = new Int32Array(new SharedArrayBuffer(I32_BYTES * 2));
-  postMessage([CHANNEL, ACTION_WAIT, id, sb, index, data], { transfer });
+  postMessage([CHANNEL, ACTION_WAIT, id, sb, name, data], { transfer });
   return waitAsync(sb, 0).value.then(() => {
     const length = sb[1];
     if (!length) return;
@@ -79,19 +84,13 @@ const invoke = (
   });
 };
 
-const createExports = (callbacks, proxy) => {
-  const exports = new Map;
-  for (const [key, value] of entries(proxy))
-    exports.set(key, callbacks.push(value) - 1);
-  return exports;
-};
-
-const createProxy = (details, exports) => {
-  const proxy = {};
-  for (const [key, index] of exports)
-    proxy[key] = invoke(details, index);
-  return proxy;
-};
+const createProxy = (details, map) => new Proxy(map, {
+  get: (map, name) => (
+    map.get(name) ||
+    map.set(name, invoke(details, name)).get(name)
+  ),
+  set: (map, name, callback) => !!map.set(name, callback),
+});
 
 export {
   ACTION_INIT,
@@ -100,8 +99,8 @@ export {
 
   actionLength,
   actionFill,
+  actionWait,
 
-  createExports,
   createProxy,
 
   isChannel,

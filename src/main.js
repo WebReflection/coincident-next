@@ -15,14 +15,12 @@ import {
 
   actionLength,
   actionFill,
+  actionWait,
 
-  createExports,
   createProxy,
 
   isChannel,
   transfer,
-
-  withResolvers,
 } from './shared.js';
 
 export default ({
@@ -36,45 +34,28 @@ export default ({
 
   class Worker extends $Worker {
     constructor(url, options) {
-      const ready = withResolvers();
-      const callbacks = [];
-      options = {
-        ...options,
-        exports: createExports(callbacks, options?.exports || {}),
-      };
+      const map = new Map;
       super(url, options);
-      this.proxy = new Proxy(ready.promise, {
-        get(promise, key) {
-          return async (...args) => {
-            const proxy = await promise;
-            return proxy[key](...args);
-          };
-        }
-      });
+      this.proxy = createProxy(
+        [
+          CHANNEL,
+          Int32Array,
+          SharedArrayBuffer,
+          this.postMessage.bind(this),
+          ignore,
+          parse,
+          transform,
+          Atomics.waitAsync,
+        ],
+        map,
+      );
       this.postMessage(ignore([CHANNEL, ACTION_INIT, options]));
       this.addEventListener('message', event => {
         if (isChannel(event, CHANNEL)) {
           const [_, ACTION, ...rest] = event.data;
           switch (ACTION) {
-            case ACTION_INIT: {
-              ready.resolve(createProxy(
-                [
-                  CHANNEL,
-                  Int32Array,
-                  SharedArrayBuffer,
-                  this.postMessage.bind(this),
-                  ignore,
-                  parse,
-                  transform,
-                  Atomics.waitAsync,
-                ],
-                ...rest
-              ));
-              break;
-            }
             case ACTION_WAIT: {
-              const [id, sb, index, args] = rest;
-              waitLength(callbacks[index], id, sb, args);
+              actionWait(waitLength, map, rest);
               break;
             }
             case ACTION_NOTIFY: {

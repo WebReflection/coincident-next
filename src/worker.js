@@ -16,8 +16,8 @@ import {
 
   actionLength,
   actionFill,
+  actionWait,
 
-  createExports,
   createProxy,
 
   isChannel,
@@ -36,7 +36,7 @@ export default ({
   const waitLength = actionLength(stringify, transform);
 
   const ready = withResolvers();
-  const callbacks = [];
+  const map = new Map;
 
   let CHANNEL = '';
   let waitSync = wait;
@@ -70,21 +70,13 @@ export default ({
                   (...args) => ({ value: { then: fn => fn(waitSync(...args)) } }) :
                   waitAsync,
               ],
-              rest[0].exports,
+              map,
             ),
-            exports(exports) {
-              postMessage(ignore([
-                CHANNEL,
-                ACTION_INIT,
-                createExports(callbacks, exports),
-              ]));
-            }
           });
           break;
         }
         case ACTION_WAIT: {
-          const [id, sb, index, args] = rest;
-          waitLength(callbacks[index], id, sb, args);
+          actionWait(waitLength, map, rest);
           break;
         }
         case ACTION_NOTIFY: {
@@ -94,5 +86,6 @@ export default ({
       }
     }
   });
+
   return ready.promise;
 };

@@ -1,13 +1,11 @@
 import coincident from '../dist/worker.js';
 
-const { proxy, exports } = await coincident();
+const { proxy } = await coincident();
 
-exports({
-  log(...args) {
-    console.log(args);
-    return args.join('-');
-  },
-});
+proxy.log = (...args) => {
+  console.log(args);
+  return args.join('-');
+};
 
 const result = proxy.alert(1, 2, 3);
 
