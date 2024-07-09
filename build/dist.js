@@ -20,4 +20,20 @@ export default [
       file: './dist/worker.js',
     }
   },
+  {
+    plugins,
+    input: './src/window/main.js',
+    output: {
+      esModule: true,
+      file: './dist/window/main.js',
+    }
+  },
+  {
+    plugins,
+    input: './src/window/worker.js',
+    output: {
+      esModule: true,
+      file: './dist/window/worker.js',
+    }
+  },
 ];

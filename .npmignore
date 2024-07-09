@@ -4,7 +4,7 @@
 .github/
 .travis.yml
 v8.log
-rollup.js
+build/
 coverage/
 node_modules/
 test/

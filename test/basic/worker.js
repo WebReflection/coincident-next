@@ -1,9 +1,11 @@
-import coincident from '../dist/worker.js';
+import coincident from '../../dist/worker.js';
 
-const { proxy } = await coincident();
+const { proxy, polyfill } = await coincident();
+
+console.info('worker', { polyfill });
 
 proxy.log = (...args) => {
-  console.log(args);
+  console.info('worker', 'log', args);
   return args.join('-');
 };
 
