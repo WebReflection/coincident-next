@@ -1,0 +1,1 @@
+const e="defineProperty",{[e]:t}=Reflect,{addEventListener:n}=EventTarget.prototype,a=new WeakMap;t(EventTarget.prototype,"addEventListener",{value(e,t,...o){const r=o.at(0)?.invoke;if(r){let t=a.get(this);t||a.set(this,t=new Map),t.set(e,[].concat(r)),delete o[0].invoke}return n.call(this,e,t,...o)}});
