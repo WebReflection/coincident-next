@@ -31,18 +31,17 @@ import {
   FUNCTION,
   NUMBER,
   OBJECT,
-  STRING,
   SYMBOL,
 } from 'js-proxy/types';
 
-const {
-  [APPLY]: apply,
-} = Reflect;
+import { MAIN, WORKER } from './constants.js';
 
-export default async (options) => {
+const { [APPLY]: apply } = Reflect;
+
+export default async options => {
   const exports = await coincident(options);
   const $ = options?.transform || (o => o);
-  const { __main__ } = exports.proxy;
+  const { [MAIN]: __main__ } = exports.proxy;
 
   const proxies = new Map;
   const proxied = (value, proxy) => {
@@ -64,12 +63,12 @@ export default async (options) => {
       case numeric[ARRAY]: return (
         typeof value === NUMBER ?
           proxied(value, proxy.array) :
-          value.map(fromEntry)
+          value
       );
       case numeric[FUNCTION]: return (
-        typeof value === STRING ?
-          get(parseInt(value)) :
-          proxied(value, proxy.function)
+        typeof value === NUMBER ?
+          proxied(value, proxy.function) :
+          get(parseInt(value))
       );
       case numeric[SYMBOL]: return fromSymbol(value);
       default: return value;
@@ -110,13 +109,7 @@ export default async (options) => {
   const asEntry = (...args) => fromEntry(__main__(...args));
 
   const handler = {
-    [DEFINE_PROPERTY]: (ref, name, descriptor) => {
-      const { get, set, value } = descriptor;
-      if (get) descriptor.get = toEntry(get);
-      if (set) descriptor.set = toEntry(set);
-      if (value) descriptor.value = toEntry(value);
-      return asEntry(DEFINE_PROPERTY, ref, toEntry(name), descriptor);
-    },
+    [DEFINE_PROPERTY]: (ref, name, descriptor) => asEntry(DEFINE_PROPERTY, ref, toEntry(name), toEntry(descriptor)),
     [DELETE_PROPERTY]: (ref, name) => asEntry(DELETE_PROPERTY, ref, toEntry(name)),
     [GET_PROTOTYPE_OF]: ref => asEntry(GET_PROTOTYPE_OF, ref),
     [GET]: (ref, name) => asEntry(GET, ref, toEntry(name)),
@@ -132,7 +125,7 @@ export default async (options) => {
     },
     [HAS]: (ref, name) => asEntry(HAS, ref, toEntry(name)),
     [IS_EXTENSIBLE]: ref => asEntry(IS_EXTENSIBLE, ref),
-    [OWN_KEYS]: ref => asEntry(OWN_KEYS, ref),
+    [OWN_KEYS]: ref => asEntry(OWN_KEYS, ref).map(fromEntry),
     [PREVENT_EXTENSION]: ref => asEntry(PREVENT_EXTENSION, ref),
     [SET]: (ref, name, value) => asEntry(SET, ref, toEntry(name), toEntry(value)),
     [SET_PROTOTYPE_OF]: (ref, proto) => asEntry(SET_PROTOTYPE_OF, ref, toEntry(proto)),
@@ -156,19 +149,13 @@ export default async (options) => {
 
   const window = proxy.object(null);
 
-  // this is basically used only to invoke callbacks attached
-  // as listeners or as references' fields.
-  exports.proxy.__worker__ = (TRAP, ref, ...args) => {
+  // for the time being this is used only to invoke callbacks
+  // attached as listeners or as references' fields.
+  exports.proxy[WORKER] = (TRAP, ref, ...args) => {
     const id = parseInt(ref);
     switch (TRAP) {
-      case APPLY: {
-        // TBD: should this be a `toEntry(...)` too?
-        return apply(get(id), ...args.map(fromEntry));
-      }
-      case DESTRUCT: {
-        drop(id);
-        break;
-      }
+      case APPLY: return toEntry(apply(get(id), ...args.map(fromEntry)));
+      case DESTRUCT: return drop(id);
     }
   };
 
