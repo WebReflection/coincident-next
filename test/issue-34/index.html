@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script type="module">
+    console.log('main');
+    import coincident from '../../dist/window/main.js';
+
+    const { Worker } = coincident();
+
+    globalThis.array = [1,2,3];
+    globalThis.object = {a: 1};
+
+    new Worker('./worker.js', { serviceWorker: '../sw.js' });
+  </script>
+</head>
+</html>

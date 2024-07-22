@@ -21,8 +21,23 @@ writeFileSync(
       </head>
       <body>
         <ul>
-          ${list.map(link => `<li>${link}</li>`).join('\n      ')}
+          ${list.map(link => `<li>${link}</li>`).join('\n' + ' '.repeat(10))}
         </ul>
       </body>
     </html>\n`.replace(/^    /gm, '')
+);
+
+writeFileSync(
+  join(__dirname, '..', 'test', 'index.html'),
+  `<!doctype html>
+  <html>
+    <head>
+      <title>Coincident Tests</title>
+    </head>
+    <body>
+      <ul>
+        ${list.map(link => `<li>${link.replace('./test/', './')}</li>`).join('\n' + ' '.repeat(10))}
+      </ul>
+    </body>
+  </html>\n`.replace(/^    /gm, '')
 );

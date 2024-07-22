@@ -94,11 +94,7 @@ export default async (options) => {
     [GET]: (ref, name) => asEntry(GET, ref, toEntry(name)),
     [GET_PROTOTYPE_OF]: (ref) => asEntry(GET_PROTOTYPE_OF, ref),
     [GET_OWN_PROPERTY_DESCRIPTOR]: (ref, name) => {
-      const descriptor = asEntry(
-        GET_OWN_PROPERTY_DESCRIPTOR,
-        ref,
-        toEntry(name),
-      );
+      const descriptor = asEntry(GET_OWN_PROPERTY_DESCRIPTOR, ref, toEntry(name));
       if (descriptor) {
         const { get, set, value } = descriptor;
         if (get) descriptor.get = fromEntry(get);
@@ -176,9 +172,5 @@ export default async (options) => {
     };
   }
 
-  return {
-    ...exports,
-    window,
-    isWindowProxy: isProxy,
-  };
+  return { ...exports, window, isWindowProxy: isProxy };
 };

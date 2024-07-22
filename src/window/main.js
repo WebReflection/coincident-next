@@ -89,12 +89,7 @@ export default (options) => {
                     token: false,
                     return: function (...args) {
                       if (args.at(0) instanceof Event) handleEvent(...args);
-                      return __worker__(
-                        APPLY,
-                        value,
-                        toEntry(this),
-                        args.map(toEntry),
-                      );
+                      return __worker__(APPLY, value, toEntry(this), args.map(toEntry)).then(fromEntry);
                     }
                   });
                   proxies.set(value, new WeakRef(fn));
@@ -126,11 +121,11 @@ export default (options) => {
           switch (TRAP) {
             case DEFINE_PROPERTY: {
               const [name, descriptor] = args.map(fromEntry);
-              return toEntry(method(target, name, asDescriptor(descriptor, fromEntry)));
+              return toEntry(method(target, name, descriptor));
             }
             case GET_OWN_PROPERTY_DESCRIPTOR: {
               const value = method(target, ...args.map(fromEntry));
-              return [numeric[value ? OBJECT : UNDEFINED], value ?? asDescriptor(value, toEntry)];
+              return [numeric[value ? OBJECT : UNDEFINED], value && asDescriptor(value, toEntry)];
             }
             case OWN_KEYS: return [numeric[ARRAY], method(target).map(toEntry)];
             default: return asEntry(method, target, args);
@@ -152,8 +147,5 @@ export default (options) => {
     }
   }
 
-  return {
-    ...exports,
-    Worker,
-  };
+  return { ...exports, Worker };
 };

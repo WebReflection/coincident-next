@@ -1,3 +1,3 @@
-const CHANNEL = 'af51c7df-3014-48c1-9994-3da3580e5488';
+const CHANNEL = 'b0aa901b-29a6-4fcc-8c25-7927ea622591';
 export const MAIN = 'M' + CHANNEL;
 export const WORKER = 'W' + CHANNEL;

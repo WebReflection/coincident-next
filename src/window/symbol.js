@@ -3,7 +3,6 @@ import { SYMBOL } from 'js-proxy/types';
 
 const { [OWN_KEYS]: ownKeys } = Reflect;
 
-
 const known = new Map(
   ownKeys(Symbol)
     .filter(s => typeof Symbol[s] === SYMBOL)
